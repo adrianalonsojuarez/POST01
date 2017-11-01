@@ -1,0 +1,196 @@
+---
+title: "BASICS OF PANEL DATA CONTRUCTION AND ANALYSIS IN RSTUDIO"
+author: "ADRIAN"
+date: "29 de octubre de 2017"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#SECTION 1: WHY PANEL DATA? THEORY BEHIND IT
+
+
+#Are you interestes in social sciences research? I want to introduce Panel data analysis as it is an stadistical method which is widely used among social sciences scholars to see the effect across time which an independent variable have in a dependent one. It allows us to observe N individuals in regular time periods (T). Therefore, it mixes cross sectional dimensions and time series for prodiving stadistical results. 
+#Panel data has an important assumption: there is correlation over time for a given individual but correlations are independent among different individuals. This assumption is known as clustering. 
+#We say a panel is balance when contains all the information (i.e. data). If there is any missing data we say the panel is unbalance. Moreover, we say a panel is short when it has many individuals and few time periods, long when it has few individuals and many time periods, and both if there is many individuals and many time periods. 
+#We need the regressors to vary as time-invariant or individual-invariant make the variation being zero so we cannot explain anything. Variation can be divide it in three types: 1. overall variation is the variation between individuals and over time 2. between variation is variation between individuals 3. within variation is the variation within individuals. 
+#There are three types of panel data: pooled model, fixed effect model and random effects model. 
+#Pooled model is not frequently used at is the one with most restrictions. Thus we will avoid it and instead we will focus on the other two widely used models.
+#Fixed effect model assumes each individual has a different intercept term and the same slope parameter. Therefore, individual-specific effects are the leftover variation in the DV that cannot be explained by the regressors (IV). 
+#Random effect model assumes individuals-specific effects are distributed independently of the regressor so each individual has the same slope and same error term. 
+#We need to check and look for consistency and efficiency. Consistency means that B-hat joins B as N becomes large. Efficiency means minimum variance. 
+#There are five main estimators: pooled OLS, between, within(FE), first differences and random (RE). All of them can be used for analizying pooled and random effect models being the RE estimator the most consistent and efficient but only the within(FE) and the first differences can be used for analyzing fixed effect models. In general, both are run when we have a fix effect model.Go to the folder IMAGES for looking to  summary table explaining this. 
+#For knowing which model we have we use the Hausman test. It test if there is significant difference between the FE and RE estimators. Remember that it can only be calcuated with time-varying regression. If chi-square is significant then we have to use a FE model whereas if it is not significant we have to use a RE model. The Multiplier(LM) test can be also applied but it is less relevant so we will just employ Hausman. 
+
+
+
+#SECTION2: REAL CASE STUDY. THE DETERMINANTS OF FORCED DISPLACEMENT IN THE 21TH CENTURY: EXPLORING THE ROLE OF STATE CAPACITY 
+
+#Now, we will practise all the previous basics of panel data using a real example. I want you to try to measure the role of state capacity and their significance to explain forced migration (Refugees, Asylum-seekers and Internally displaced populations). Our hypothesis is the following one: Forced migration is higher in states with lower institutional capacity.
+#Forced displacement is measured as the relative number of RAS (Refugees and Asylum-seekers) and IDPs (Internally dispclaced populations) coming from each state using data from UNHRC. Forced displacement will be observed across time in the period covering from 2000 to 2016 (not include 2001). I operationalize institutional/state capacity by using PRS indicators as the PRS Group is the world's leading quant-driven political and country risk rating and forecasting firm and it include data from all the period I want to cover (except for 2001) in a wide list of countries which may be sufficient for providing significant results. The PRSICRG data contains six main indicator: Voice and Accountability, Political Stability and Absence of Violence, Government Effectiveness, Regulatory Quality, Rule of Law, and Control of Corruption. Each of this six main indicators are built with different proxies. Role of military in politics and democratic accountability levels are the proxies for Voice and Accountability; government stability, internal conflict, external conflict and ethnic tensions are the proxies for Political Stability and Absence of Violence; bureaucratic quality is the proxy variable for Government Effectiveness; investment profile for Regulatory Quality; law and order for Rule of Law; and corruption for Control of Corruption. Data coverage 140 countries in the period between 2000 and 2016 with the exception of 2001, when data was no gathered.
+
+
+#SECTION2.1: CLEANING DATA FOR SUITING A PANEL DATA FRAMEWORK. 
+
+#First of all we have to do the data cleaning in both datasets, give the appropiate format for panel analysis and merge/join both data sets. I will show how to do this in the following paragraphs but you can escape this if you are just interested in start analyzying the data. However, I strongly recommend to look at this section as in most of the cases data has to be modify by the scientific and if you know certain R skill you can do in a few minutes what it would take hours and hours using excel. 
+
+library(tidyverse)
+library(stringr)
+
+#Cleaning prs dataset
+#read data in, remove first row, rename variable country variable and reshape entire dataset to long
+prs <- read.csv("prs.csv")
+
+Country <- prs_reshape$X140.COUNTRIES
+
+prs_reshape <- prs %>% slice(-1) %>% gather(variable, value, -c(Country:Code), na.rm=TRUE)
+
+
+#extract digit/year value from variable name and recombine
+regexp <- "[[:digit:]]+"
+Country <- str_extract(prs_reshape$variable, regexp)
+prs_tidy <- cbind(prs_reshape, Country) %>% rename(year = Country)
+
+#extract number from variable 
+prs_tidy$variable <- gsub('[[:digit:]]+', '', prs_tidy$variable)
+
+#spread variables
+prs_tidy <- prs_tidy %>%  group_by(variable, X140.COUNTRIES) %>% 
+  mutate(ind = row_number()) %>%  
+  spread(variable, value) 
+
+#remove blanks
+prs_tidy <- prs_tidy %>% filter(X140.COUNTRIES != "")
+
+#Fix the year (from two digits to four)
+prs_tidy$year  <- ifelse(prs_tidy$year == "00", "2000", prs_tidy$year)
+prs_tidy$year  <- ifelse(prs_tidy$year == "2", "2002", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "3", "2003", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "4", "2004", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "5", "2005", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "6", "2006", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "7", "2007", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "8", "2008", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "9", "2009", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "10", "2010", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "11", "2011", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "12", "2012", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "13", "2013", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "14", "2014", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "15", "2015", prs_tidy$year) 
+prs_tidy$year  <- ifelse(prs_tidy$year == "16", "2016", prs_tidy$year)
+
+
+
+#Now, let큦 clean the UN data
+library(dplyr)
+library(tidyr)
+library(readr)
+library(splitstackshape)
+
+un <- read_csv("Desktop/Stat 133 /UN/UN_clean.csv")
+un <- un[, -2]
+
+colnames(un) <- c("Year", "Origin", "PopType", "Value")
+
+un_spread <- un %>%
+  mutate(row = row_number()) %>%
+  group_by(Year, Origin) %>%
+  spread(PopType, Value)
+
+un_clean <- un_spread[, -3]
+un_clean[is.na(un_clean)] <- 0
+colnames(un_clean) <- c("Year", "Origin", "AS", "IDP", "RF")
+
+un_clean <- un_clean %>%
+  mutate(Total = AS + IDP + RF)
+
+un_clean$Year <- as.numeric(un_clean$Year)
+un_clean$Origin <- as.character(un_clean$Origin)
+un_clean$AS <- as. numeric(un_clean$AS)
+un_clean$IDP <- as.numeric(un_clean$IDP)
+un_clean$RF <- as.numeric(un_clean$RF)
+un_clean$Total <- as.numeric(un_clean$Total)
+
+un_summary <- un_clean %>%
+  group_by(Year, Origin) %>%
+  summarise_all(sum)
+tabla1 <- un_summary
+
+#Now that we have both datasets clean, let큦 merge both of them in a new dataset called FINAL. 
+
+FINAL = merge(prs_tidy, tabla1, by = "YC")
+
+#Let큦 substract variables we do not need
+
+FINAL <- FINAL[, -12]
+FINAL <- FINAL[, -12]
+
+#Let큦 create a new variable which contains both Country and Year
+
+prs_tidy$YC <- paste0(prs_tidy$Country, prs_tidy$Year)
+
+#Let큦 rename the variables
+
+names(FINAL)[names(FINAL)=="Country.x"] <- "Country"
+names(FINAL)[names(FINAL)=="Year.x"] <- "Year"
+
+#Let큦 create a new variable containing the total number of forced displacement
+
+FINAL$TOTAL_FORCED_DISPLACED = FINAL$sum_AS + FINAL$sum_Refugees + FINAL$sum_IDPs
+
+#Your turn: create a variable called STATE_CAPACITY which contains the sum of all the PRS variables(PRSCC, PRSGF...). 
+
+
+#SECTION2.2: RUNNING PANEL DATA ANALYSIS IN RSTUDIO
+
+#Now, let큦 see how to apply the theory into practise. Follow the tutorial: what results does the following commands provide using the FINAL datset?
+#Install panel data package
+install.packages("plm")
+#load the package
+library(plm)
+#Set our FINAL data as a panel data
+pdata <- plm.data(FINAL, index=c("id", "t"))
+#Descriptive stadistics
+summary(TOTAL_FORCED_DISPLACED)
+summary(STATE_CAPACITY)
+#Pooled OLS estimator
+pooling <-  plm (TOTAL_FORCED_DISPLACED ~ STATE_CAPACITY, data = pdata, model="pooling")
+summary(pooling)
+#Between estimator
+between <- plm (TOTAL_FORCED_DISPLACED ~ STATE_CAPACITY, data = pdata, model="between")
+summary(between)
+#First differences estimator
+firstdiff <- plm (TOTAL_FORCED_DISPLACED ~ STATE_CAPACITY, data = pdata, model="fd")
+summary(fd)
+#Fixed effects or within estimator
+fixed <- plm (TOTAL_FORCED_DISPLACED ~ STATE_CAPACITY, data = pdata, model="within")
+summary(fixed)
+#Random effects estimator
+random <- plm (TOTAL_FORCED_DISPLACED ~ STATE_CAPACITY, data = pdata, model="random")
+summary(random)
+#LM test for random effects vs OLS
+plmtest(pooling)
+#LM test for fixed effects vs OLS
+pFtest(fixed, pooling)
+#Hausman test for fixed vs random effects model
+phtest(random, fixed) 
+
+#According with the results. Should we use the fixed or the random effect model?
+
+#SECTION3:CONCLUSION
+
+#Panel data analysis is highly useful for understand the causes of variation betwen and within differentes entities among time. Once you get the data in the proper format it is easily run by using Rstudio. The most important part of the analysis is to made the right decision of using whether ranndom effect or fixed effects. The Hausman test make our lives much easier in accomplishing that. 
+
+#REFERENCES
+#https://www.princeton.edu/~otorres/Panel101.pdf
+#https://www.youtube.com/watch?v=aUVZWnVnjxs&t=564s
+#https://www.youtube.com/watch?v=1pST2lUx6QM
+#http://statmath.wu.ac.at/~hauser/LVs/FinEtricsQF/FEtrics_Chp5.pdf
+#http://people.stern.nyu.edu/wgreene/Econometrics/PanelDataNotes.htm
+#https://www.youtube.com/watch?v=L9OR1oUGOKY&t=54s
+#https://cran.r-project.org/web/packages/plm/vignettes/plm.pdf
+#http://www.polsci.ucsb.edu/faculty/glasgow/ps207/ps207_class1.r
+
+
